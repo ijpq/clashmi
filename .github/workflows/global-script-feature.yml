@@ -1,0 +1,137 @@
+name: Global Script Feature Tests
+
+on:
+  push:
+    paths:
+      - 'lib/app/modules/global_script_manager.dart'
+      - 'lib/screens/global_script_edit_screen.dart'
+      - 'lib/app/local_services/vpn_service.dart'
+      - 'test/global_script_**'
+      - 'pubspec.yaml'
+  pull_request:
+    paths:
+      - 'lib/app/modules/global_script_manager.dart'
+      - 'lib/screens/global_script_edit_screen.dart'
+      - 'lib/app/local_services/vpn_service.dart'
+      - 'test/global_script_**'
+      - 'pubspec.yaml'
+
+jobs:
+  test-global-script:
+    name: Test Global Script Feature
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run Global Script tests
+        run: flutter test test/global_script_manager_test.dart --coverage
+
+      - name: Verify JavaScript dependencies
+        run: |
+          flutter pub deps | grep flutter_js
+          flutter pub deps | grep yaml
+
+      - name: Check i18n strings exist
+        run: |
+          grep -q "globalScript" lib/i18n/en.i18n.json
+          grep -q "globalScript" lib/i18n/zh-CN.i18n.json
+          echo "✓ i18n strings verified"
+
+      - name: Verify integration points
+        run: |
+          # Check GlobalScriptManager is initialized in Biz
+          grep -q "GlobalScriptManager.init()" lib/app/modules/biz.dart
+          echo "✓ GlobalScriptManager initialization verified"
+
+          # Check VPNService integration
+          grep -q "GlobalScriptManager.executeScript" lib/app/local_services/vpn_service.dart
+          echo "✓ VPNService integration verified"
+
+          # Check navigation exists
+          grep -q "GlobalScriptEditScreen" lib/screens/group_helper.dart
+          echo "✓ Navigation integration verified"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: global-script-test-results
+          path: coverage/
+
+  frontend-check:
+    name: Frontend Verification
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Check for compile errors in UI
+        run: flutter analyze lib/screens/global_script_edit_screen.dart
+
+      - name: Verify UI imports
+        run: |
+          # Check that all necessary imports exist
+          grep -q "package:re_editor/re_editor.dart" lib/screens/global_script_edit_screen.dart
+          grep -q "package:re_highlight/languages/javascript.dart" lib/screens/global_script_edit_screen.dart
+          grep -q "package:clashmi/app/modules/global_script_manager.dart" lib/screens/global_script_edit_screen.dart
+          echo "✓ UI imports verified"
+
+      - name: Build UI widget test
+        run: |
+          if [ -f "test/global_script_edit_screen_test.dart" ]; then
+            flutter test test/global_script_edit_screen_test.dart
+          else
+            echo "Widget test not found, skipping"
+          fi
+
+  integration-check:
+    name: Integration Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Test with sample script
+        run: |
+          if [ -f "test/global_script_integration_test.dart" ]; then
+            flutter test test/global_script_integration_test.dart
+          else
+            echo "Integration test not found, creating basic compilation check"
+            flutter analyze lib/app/modules/global_script_manager.dart --fatal-infos
+          fi
+
+      - name: Verify config file paths
+        run: |
+          grep -q "globalScriptConfigFilePath" lib/app/utils/path_utils.dart
+          echo "✓ Config file path utilities verified"
