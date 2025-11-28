@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:clashmi/app/clash/clash_http_api.dart';
 import 'package:clashmi/app/modules/clash_setting_manager.dart';
+import 'package:clashmi/app/modules/global_script_manager.dart';
 import 'package:clashmi/app/modules/profile_manager.dart';
 import 'package:clashmi/app/modules/profile_patch_manager.dart';
 import 'package:clashmi/app/modules/setting_manager.dart';
@@ -179,7 +180,36 @@ class VPNService {
     config.base_dir = await PathUtils.profileDir();
     config.work_dir = PathUtils.appAssetsDir();
     config.cache_dir = await PathUtils.cacheDir();
-    config.core_path = path.join(await PathUtils.profilesDir(), profile.id);
+
+    // Prepare profile path, apply global script if enabled
+    String profilePath = path.join(await PathUtils.profilesDir(), profile.id);
+    if (GlobalScriptManager.isEnabled()) {
+      try {
+        // Read the original profile
+        final profileFile = File(profilePath);
+        if (await profileFile.exists()) {
+          final profileContent = await profileFile.readAsString();
+
+          // Execute global script
+          final result = await GlobalScriptManager.executeScript(profileContent);
+          if (result.error == null && result.data != null) {
+            // Save the modified config to a temporary file
+            final tempPath = path.join(await PathUtils.cacheDir(),
+                                       'profile_with_global_script.yaml');
+            final tempFile = File(tempPath);
+            await tempFile.writeAsString(result.data!, flush: true);
+            profilePath = tempPath;
+            Log.d("Global script executed successfully, using modified config");
+          } else {
+            Log.w("Global script execution failed: ${result.error?.message}, using original config");
+          }
+        }
+      } catch (err) {
+        Log.w("Failed to apply global script: ${err.toString()}, using original config");
+      }
+    }
+
+    config.core_path = profilePath;
     config.core_path_patch =
         await ProfilePatchManager.getProfilePatchPath(profile.patch);
     config.core_path_patch_final = await PathUtils.serviceCorePatchFinalPath();

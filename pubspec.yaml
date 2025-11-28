@@ -76,6 +76,8 @@ dependencies:
   icloud_storage: 2.2.0 #https://github.com/lollipopkit/flutter_server_box/blob/d94b2a7805891da3e652a9a65cc0c774a2ec6db4/lib/core/utils/sync/icloud.dart#L32
   archive: 4.0.7
   quick_actions: 1.1.0
+  flutter_js: ^0.8.1
+  yaml: ^3.1.2
   android_package_manager: #0.7.1
     #path: ../android_package_manager
     git:

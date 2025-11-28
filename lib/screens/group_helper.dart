@@ -31,6 +31,7 @@ import 'package:clashmi/screens/group_screen.dart';
 import 'package:clashmi/screens/language_settings_screen.dart';
 import 'package:clashmi/screens/list_add_screen.dart';
 import 'package:clashmi/screens/perapp_android_screen.dart';
+import 'package:clashmi/screens/global_script_edit_screen.dart';
 import 'package:clashmi/screens/profiles_patch_board_screen.dart';
 import 'package:clashmi/screens/theme_define.dart';
 import 'package:clashmi/screens/themes.dart';
@@ -897,6 +898,17 @@ class GroupHelper {
                       MaterialPageRoute(
                           settings: ProfilesPatchBoardScreen.routSettings(),
                           builder: (context) => ProfilesPatchBoardScreen()));
+                })),
+        GroupItemOptions(
+            pushOptions: GroupItemPushOptions(
+                name: tcontext.meta.globalScript,
+                tips: tcontext.meta.globalScriptTips,
+                onPush: () async {
+                  await Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          settings: GlobalScriptEditScreen.routSettings(),
+                          builder: (context) => const GlobalScriptEditScreen()));
                 })),
       ];
       List<GroupItem> groups = [];

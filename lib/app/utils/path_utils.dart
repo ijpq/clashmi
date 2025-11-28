@@ -284,6 +284,15 @@ class PathUtils {
     return "profile_patchs.json";
   }
 
+  static String globalScriptFileName() {
+    return "global_script.json";
+  }
+
+  static Future<String> globalScriptConfigFilePath() async {
+    String filePath = await profileDir();
+    return path.join(filePath, globalScriptFileName());
+  }
+
   static Future<String> settingFilePath() async {
     String filePath = await profileDir();
     return path.join(filePath, settingFileName());
