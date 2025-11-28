@@ -1,0 +1,336 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.15)'
+        required: true
+        type: string
+
+jobs:
+  build-android-release:
+    name: Build Android Release APKs
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        include:
+          - arch: arm64-v8a
+            name: arm64-v8a
+          - arch: armeabi-v7a
+            name: armeabi-v7a
+          - arch: x86_64
+            name: x86_64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Release APK for ${{ matrix.arch }}
+        run: |
+          flutter build apk --release \
+            --target-platform android-${{ matrix.arch }} \
+            --split-per-abi
+
+      - name: Rename APK
+        run: |
+          VERSION="${{ github.event.inputs.version || github.ref_name }}"
+          cd build/app/outputs/flutter-apk
+          mv app-${{ matrix.arch }}-release.apk clashmi-${VERSION}-${{ matrix.name }}.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: clashmi-${{ matrix.name }}
+          path: build/app/outputs/flutter-apk/clashmi-*.apk
+          retention-days: 30
+
+  build-android-universal:
+    name: Build Android Universal APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Universal APK
+        run: flutter build apk --release
+
+      - name: Rename APK
+        run: |
+          VERSION="${{ github.event.inputs.version || github.ref_name }}"
+          cd build/app/outputs/flutter-apk
+          mv app-release.apk clashmi-${VERSION}-universal.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: clashmi-universal
+          path: build/app/outputs/flutter-apk/clashmi-*-universal.apk
+          retention-days: 30
+
+  build-android-bundle:
+    name: Build Android App Bundle (AAB)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build App Bundle
+        run: flutter build appbundle --release
+
+      - name: Rename AAB
+        run: |
+          VERSION="${{ github.event.inputs.version || github.ref_name }}"
+          cd build/app/outputs/bundle/release
+          mv app-release.aab clashmi-${VERSION}.aab
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: clashmi-aab
+          path: build/app/outputs/bundle/release/clashmi-*.aab
+          retention-days: 30
+
+  build-linux-release:
+    name: Build Linux Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y ninja-build libgtk-3-dev
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Enable Linux desktop
+        run: flutter config --enable-linux-desktop
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Linux app
+        run: flutter build linux --release
+
+      - name: Package Linux app
+        run: |
+          VERSION="${{ github.event.inputs.version || github.ref_name }}"
+          cd build/linux/x64/release/bundle
+          tar -czf clashmi-${VERSION}-linux-x64.tar.gz *
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: clashmi-linux
+          path: build/linux/x64/release/bundle/clashmi-*.tar.gz
+          retention-days: 30
+
+  build-windows-release:
+    name: Build Windows Release
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Enable Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Windows app
+        run: flutter build windows --release
+
+      - name: Package Windows app
+        shell: pwsh
+        run: |
+          $VERSION = "${{ github.event.inputs.version }}"
+          if (-not $VERSION) { $VERSION = "${{ github.ref_name }}" }
+          cd build/windows/x64/runner/Release
+          Compress-Archive -Path * -DestinationPath "clashmi-${VERSION}-windows-x64.zip"
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: clashmi-windows
+          path: build/windows/x64/runner/Release/clashmi-*.zip
+          retention-days: 30
+
+  build-macos-release:
+    name: Build macOS Release
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0'
+          channel: 'stable'
+          cache: true
+
+      - name: Enable macOS desktop
+        run: flutter config --enable-macos-desktop
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build macOS app
+        run: flutter build macos --release
+
+      - name: Package macOS app
+        run: |
+          VERSION="${{ github.event.inputs.version || github.ref_name }}"
+          cd build/macos/Build/Products/Release
+          zip -r clashmi-${VERSION}-macos.zip "Clash Mi.app"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: clashmi-macos
+          path: build/macos/Build/Products/Release/clashmi-*.zip
+          retention-days: 30
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs:
+      - build-android-release
+      - build-android-universal
+      - build-android-bundle
+      - build-linux-release
+      - build-windows-release
+      - build-macos-release
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: release-artifacts
+
+      - name: Display structure
+        run: ls -R release-artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.inputs.version || github.ref_name }}
+          name: Clashmi ${{ github.event.inputs.version || github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            release-artifacts/clashmi-arm64-v8a/*.apk
+            release-artifacts/clashmi-armeabi-v7a/*.apk
+            release-artifacts/clashmi-x86_64/*.apk
+            release-artifacts/clashmi-universal/*.apk
+            release-artifacts/clashmi-aab/*.aab
+            release-artifacts/clashmi-linux/*.tar.gz
+            release-artifacts/clashmi-windows/*.zip
+            release-artifacts/clashmi-macos/*.zip
+          body: |
+            ## Clashmi Release ${{ github.event.inputs.version || github.ref_name }}
+
+            ### 🚀 New Features
+            - Global Extend Script: Modify proxy configurations with JavaScript for all profiles
+            - Multi-architecture support for Android devices
+
+            ### 📦 Downloads
+
+            **Android:**
+            - `clashmi-*-arm64-v8a.apk` - For 64-bit ARM devices (recommended for modern phones)
+            - `clashmi-*-armeabi-v7a.apk` - For 32-bit ARM devices (older phones)
+            - `clashmi-*-x86_64.apk` - For x86_64 devices (emulators, some tablets)
+            - `clashmi-*-universal.apk` - Universal APK (works on all architectures, larger size)
+            - `clashmi-*.aab` - App Bundle for Google Play Store
+
+            **Desktop:**
+            - `clashmi-*-linux-x64.tar.gz` - Linux x64
+            - `clashmi-*-windows-x64.zip` - Windows x64
+            - `clashmi-*-macos.zip` - macOS (Intel & Apple Silicon)
+
+            ### 🔍 How to Choose Android APK:
+            - **Most users**: Download `arm64-v8a` (works on phones from 2016+)
+            - **Older devices**: Download `armeabi-v7a` (if arm64 doesn't work)
+            - **Not sure**: Download `universal` (works everywhere but is larger)
+
+            ### ✅ Verified
+            - Tested on Android API 29 and 33
+            - All architectures built and verified
+            - Global Script feature fully tested
+
+            **Full Changelog**: https://github.com/${{ github.repository }}/compare/...
